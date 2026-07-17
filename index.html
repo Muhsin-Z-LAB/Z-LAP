@@ -433,7 +433,6 @@
         }
         .ai-input-wrapper input { flex-grow: 1; background: transparent; border: none; color: white; outline: none; font-size: 14px; }
 
-        /* تخصيص شريط التمرير */
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
@@ -448,8 +447,8 @@
             <h1>Z-LAB</h1>
             <span class="auth-tag">Unified Physics Core</span>
             
-            <input type="text" class="login-input" placeholder="Neural ID" value="Z-ADMIN-01">
-            <input type="password" class="login-input" placeholder="Security Key" value="**********">
+            <input type="text" class="login-input" placeholder="Neural ID" value="">
+            <input type="password" class="login-input" placeholder="Security Key" value="">
             
             <button class="login-btn" onclick="initCore()">
                 <i class="fas fa-plug"></i> Initialize Core
@@ -465,7 +464,7 @@
     <div id="main-app">
         <header class="glass">
             <div class="header-section">
-                <button class="toggle-btn" onclick="togglePanel('left')" title="إخفاء/إظهار الإعدادات">
+                <button class="toggle-btn" onclick="togglePanel('left')" title="">
                     <i class="fas fa-align-left"></i>
                 </button>
                 <div class="brand-name">Z-LAB <span style="color: var(--accent); font-weight: 900;">V4.0</span></div>
@@ -531,7 +530,7 @@
                 <div id="panel-circuits" style="display: none;">
                     <div class="sidebar-title" style="color: #ffcc00;">Circuit Control</div>
                     <p style="font-size:13px; color:#aaa; line-height: 1.6; padding: 15px; border-left: 2px solid #ffcc00; background: rgba(255,204,0,0.05); border-radius: 5px; margin-bottom: 20px;">
-                        <i class="fas fa-info-circle"></i> تم دمج أدوات التحكم وتعديل القيم داخل مساحة العمل (المحاكي) لتوفير شاشة رؤية أوسع وأكثر وضوحاً.
+                        <i class="fas fa-info-circle"></i> 
                     </p>
                 </div>
 
@@ -613,7 +612,7 @@
             <div class="sidebar-content">
                 <div class="sidebar-title">Physics Modules</div>
                 <button class="glass-btn active" id="m-mechanics" onclick="sendCmd('mode_mechanics')">
-                    <i class="fas fa-rocket"></i> 1. Mechanics (3D)
+                    <i class="fas fa-rocket"></i> 1. Mechanics (2D)
                 </button>
                 <button class="glass-btn" id="m-circuits" onclick="sendCmd('mode_circuits')">
                     <i class="fas fa-microchip"></i> 2. Electricity (2D)
