@@ -1,6 +1,3 @@
-
-
-Circuit fixed · HTML
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,13 +25,21 @@ Circuit fixed · HTML
             position: absolute;
             top: 0; left: 0;
         }
- 
-        /* Top Mode Toggle Button */
-        #mode-toggle {
+
+        /* Top Bar Container */
+        #top-bar {
             position: absolute;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 20;
+            pointer-events: auto;
+        }
+ 
+        /* Top Buttons */
+        #mode-toggle, #exp-select {
             background: #3b82f6;
             color: white;
             padding: 12px 25px;
@@ -42,17 +47,20 @@ Circuit fixed · HTML
             border-radius: 30px;
             font-weight: bold;
             font-size: 15px;
-            z-index: 20;
             cursor: pointer;
             box-shadow: 0 5px 15px rgba(0,0,0,0.5);
             transition: all 0.3s;
             touch-action: manipulation;
-            pointer-events: auto;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            outline: none;
         }
-        #mode-toggle:active { transform: translateX(-50%) scale(0.95); }
+        #exp-select {
+            background: #8b5cf6;
+        }
+        #exp-select option {
+            background: #1c2028;
+            color: white;
+        }
+        #mode-toggle:active { transform: scale(0.95); }
  
         /* Collapsible Panels */
         .panel {
@@ -71,8 +79,8 @@ Circuit fixed · HTML
             pointer-events: auto;
         }
  
-        #toolbar { left: 20px; width: 150px; padding: 15px 10px; transform: translateX(0); }
-        #toolbar.collapsed { transform: translateX(-180px); }
+        #toolbar { left: 20px; width: 160px; padding: 15px 10px; transform: translateX(0); overflow-y: auto;}
+        #toolbar.collapsed { transform: translateX(-190px); }
  
         #dashboard { right: 20px; width: 320px; padding: 20px; transform: translateX(0); overflow-y: auto; }
         #dashboard.collapsed { transform: translateX(360px); }
@@ -97,7 +105,7 @@ Circuit fixed · HTML
             box-shadow: 0 0 10px rgba(0,0,0,0.5);
             touch-action: manipulation;
         }
-        #toggle-left { left: 170px; border-radius: 0 8px 8px 0; transition: left 0.3s; }
+        #toggle-left { left: 180px; border-radius: 0 8px 8px 0; transition: left 0.3s; }
         #toggle-left.collapsed { left: 0px; }
         #toggle-right { right: 340px; border-radius: 8px 0 0 8px; transition: right 0.3s; }
         #toggle-right.collapsed { right: 0px; }
@@ -178,7 +186,16 @@ Circuit fixed · HTML
 </head>
 <body>
  
-<button id="mode-toggle" onclick="toggleMode()">✋ Mode: Move & Edit</button>
+<div id="top-bar">
+    <button id="mode-toggle" onclick="toggleMode()">✋ Mode: Move & Edit</button>
+    <select id="exp-select" onchange="loadExperiment(this.value)">
+        <option value="">🧪 Ready Presets</option>
+        <option value="cap_charge">⚡ Capacitor Charging</option>
+        <option value="induction">🧲 Faraday's Induction</option>
+        <option value="self_induction">🔄 Self-Induction </option>
+        <option value="lc_tank">🌊 LC Oscillation </option>
+    </select>
+</div>
  
 <canvas id="simCanvas"></canvas>
  
@@ -310,6 +327,47 @@ const DIELECTRICS = {
     "water":   { name: "Distilled Water", er: 80.1, polar: true, color: "#4682dc" }
 };
 const EPSILON_0 = 8.854e-12;
+
+function drawMagneticFieldLines(ctx, x, y, strength, type = "bar") {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.lineWidth = 1.5;
+    
+    let absStrength = Math.abs(strength);
+    let sizeScale = 1.0;
+    let alpha = 0.5;
+    
+    if (type === "bar" || type === "horseshoe") {
+        sizeScale = 0.4 + (absStrength * 1.2); 
+        alpha = Math.min(0.85, 0.15 + absStrength * 0.4);
+    } else {
+        sizeScale = 0.4 + (absStrength * 150); 
+        alpha = Math.min(0.85, absStrength * 300);
+    }
+    
+    if (alpha < 0.05) { ctx.restore(); return; }
+
+    let numLines = 6;
+    let baseWidth = type === "horseshoe" ? 60 : 80;
+
+    for (let i = 1; i <= numLines; i++) {
+        let extent = i * 18 * sizeScale;
+        ctx.strokeStyle = `rgba(56, 189, 248, ${alpha - (i * 0.12 * alpha)})`;
+        ctx.beginPath();
+        
+        if(type === "bar" || type === "electromagnet") {
+            ctx.moveTo(-baseWidth/2 + 10, -10);
+            ctx.bezierCurveTo(-baseWidth/2 - extent, -extent - 20, baseWidth/2 + extent, -extent - 20, baseWidth/2 - 10, -10);
+            ctx.moveTo(-baseWidth/2 + 10, 10);
+            ctx.bezierCurveTo(-baseWidth/2 - extent, extent + 20, baseWidth/2 + extent, extent + 20, baseWidth/2 - 10, 10);
+        } else if (type === "horseshoe") {
+            ctx.moveTo(-35, 30);
+            ctx.bezierCurveTo(-35 - extent, 30 + extent, 35 + extent, 30 + extent, 35, 30);
+        }
+        ctx.stroke();
+    }
+    ctx.restore();
+}
  
 // ══════════════════════════════════════════════════════
 // 2. Nodes & Wires
@@ -335,10 +393,10 @@ class Node {
     }
     draw(ctx) {
         ctx.fillStyle = this.connections.length > 0 ? COLORS.NODE_CONN : COLORS.NODE;
-        ctx.beginPath(); ctx.arc(this.x, this.y, 7/camera.zoom, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(this.x, this.y, 8/camera.zoom, 0, Math.PI*2); ctx.fill();
         ctx.strokeStyle = "white"; ctx.lineWidth = 2/camera.zoom; ctx.stroke();
     }
-    checkHit(pos) { return Math.hypot(pos.x - this.x, pos.y - this.y) < 40/camera.zoom; }
+    checkHit(pos) { return Math.hypot(pos.x - this.x, pos.y - this.y) < 60/camera.zoom; } // أصبحت أسهل للالتقاط باللمس
 }
  
 class Wire {
@@ -382,8 +440,8 @@ class Wire {
         let pts = this.getPoints();
         for(let i=0;i<pts.length-1;i++) {
             let x1=pts[i].x, y1=pts[i].y, x2=pts[i+1].x, y2=pts[i+1].y;
-            let minX = Math.min(x1,x2)-25, maxX = Math.max(x1,x2)+25;
-            let minY = Math.min(y1,y2)-25, maxY = Math.max(y1,y2)+25;
+            let minX = Math.min(x1,x2)-30, maxX = Math.max(x1,x2)+30;
+            let minY = Math.min(y1,y2)-30, maxY = Math.max(y1,y2)+30;
             if(pos.x>=minX && pos.x<=maxX && pos.y>=minY && pos.y<=maxY) return true;
         }
         return false;
@@ -407,7 +465,7 @@ class Component {
     drawSelection(ctx) {
         if(this.isSelected) {
             ctx.strokeStyle = COLORS.SELECTED; ctx.lineWidth = 2; ctx.setLineDash([4,4]);
-            ctx.strokeRect(-this.w/2 - 5, -this.h/2 - 5, this.w + 10, this.h + 10);
+            ctx.strokeRect(-this.w/2 - 10, -this.h/2 - 10, this.w + 20, this.h + 20);
             ctx.setLineDash([]);
         }
     }
@@ -434,7 +492,8 @@ class Component {
         let hw = (this.rotation % 180 === 0) ? this.w/2 : this.h/2;
         let hh = (this.rotation % 180 === 0) ? this.h/2 : this.w/2;
         let cx = this.x + this.w/2; let cy = this.y + this.h/2;
-        return pos.x >= cx-hw && pos.x <= cx+hw && pos.y >= cy-hh && pos.y <= cy+hh;
+        // زيادة منطقة الاصطدام لتناسب اللمس
+        return pos.x >= cx-hw-15 && pos.x <= cx+hw+15 && pos.y >= cy-hh-15 && pos.y <= cy+hh+15;
     }
 }
  
@@ -460,24 +519,38 @@ class Battery extends Component {
 class Resistor extends Component {
     constructor(x,y) {
         super(x,y, 100, 30, "Resistor");
-        this.resistance = 10;
-        this.originalResistance = 10;
-        this.maxPower = 100; 
+        this.resistance = 100;
+        this.originalResistance = 100;
+        this.maxPower = 50; 
         this.nodes.push(new Node(this, -50, 0), new Node(this, 50, 0));
         this.updateNodes();
     }
     draw(ctx) {
         this.beginDraw(ctx);
-        ctx.fillStyle = "#dcb482"; ctx.roundRect(-30, -15, 60, 30, 10).fill();
-        ctx.strokeStyle = "#999"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(-50,0); ctx.lineTo(-30,0); ctx.moveTo(30,0); ctx.lineTo(50,0); ctx.stroke();
         
-        ctx.fillStyle = "black"; ctx.fillRect(-20, -15, 5, 30); ctx.fillRect(-10, -15, 5, 30); ctx.fillStyle = "red"; ctx.fillRect(15, -15, 5, 30);
+        // رسم أسلاك المقاومة
+        ctx.strokeStyle = "#94a3b8"; ctx.lineWidth = 4;
+        ctx.beginPath(); ctx.moveTo(-50,0); ctx.lineTo(50,0); ctx.stroke();
+
+        // جسم المقاومة بتدرج لوني يعطي تأثير 3D
+        let grad = ctx.createLinearGradient(0, -15, 0, 15);
+        grad.addColorStop(0, "#dcb482");
+        grad.addColorStop(0.5, "#f3e1c6");
+        grad.addColorStop(1, "#c09761");
+        
+        ctx.fillStyle = grad; 
+        ctx.roundRect(-30, -15, 60, 30, 8).fill();
+        ctx.strokeStyle = "#a17d4a"; ctx.lineWidth = 1; ctx.stroke();
+        
+        // الخطوط الملونة
+        ctx.fillStyle = "#1e293b"; ctx.fillRect(-20, -14, 4, 28); 
+        ctx.fillStyle = "#ef4444"; ctx.fillRect(-10, -14, 4, 28); 
+        ctx.fillStyle = "#d97706"; ctx.fillRect(15, -14, 4, 28);
         
         if(!this.isBurnt) {
-            ctx.fillStyle = "white"; ctx.font = "bold 12px monospace";
-            let txt = this.resistance >= 1000000 ? (this.resistance/1000000).toFixed(1)+"MΩ" : (this.resistance >= 1000 ? (this.resistance/1000).toFixed(1)+"kΩ" : this.resistance+"Ω");
-            ctx.fillText(txt, -20, -22);
+            ctx.fillStyle = "black"; ctx.font = "bold 11px monospace";
+            let txt = this.resistance >= 1000000 ? (this.resistance/1000000).toFixed(1)+"M" : (this.resistance >= 1000 ? (this.resistance/1000).toFixed(1)+"k" : this.resistance);
+            ctx.fillText(txt+"Ω", -15, -20);
         }
         this.endDraw(ctx);
     }
@@ -486,9 +559,9 @@ class Resistor extends Component {
 class Bulb extends Component {
     constructor(x,y) {
         super(x,y, 60, 60, "Bulb");
-        this.resistance = 15;
-        this.originalResistance = 15;
-        this.maxPower = 200; 
+        this.resistance = 10;
+        this.originalResistance = 10;
+        this.maxPower = 10000; 
         this.nodes.push(new Node(this, -30, 20), new Node(this, 30, 20));
         this.updateNodes();
     }
@@ -497,10 +570,10 @@ class Bulb extends Component {
         let I = Math.min(Math.abs(this.current)/0.5, 1.2); 
         
         if (I > 0.05 && !this.isBurnt) {
-            let grad = ctx.createRadialGradient(0, -10, 0, 0, -10, 40*I);
+            let grad = ctx.createRadialGradient(0, -10, 0, 0, -10, 60*I);
             grad.addColorStop(0, `rgba(255,255,100,${0.8*I})`);
             grad.addColorStop(1, 'rgba(255,150,0,0)');
-            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(0, -10, 40*I, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(0, -10, 60*I, 0, Math.PI*2); ctx.fill();
         }
         
         ctx.fillStyle = "#64748b"; ctx.fillRect(-15, 15, 30, 15);
@@ -625,33 +698,138 @@ class Fuse extends Component {
     }
 }
  
-class Electromagnet extends Component {
+class Coil extends Component {
     constructor(x,y) {
-        super(x,y, 100, 40, "Magnet");
-        this.resistance = 5.0; this.B = 0;
-        this.originalResistance = 5.0;
-        this.maxPower = 500;
-        this.nodes.push(new Node(this, -50, 0), new Node(this, 50, 0));
+        super(x,y, 80, 80, "Induction Coil");
+        this.resistance = 1.0; 
+        this.originalResistance = 1.0;
+        this.turns = 100;
+        this.emf = 0;
+        this.lastFlux = undefined;
+        this.lastCurrent = 0;
+        this.inductance = 0.5; 
+        this.maxPower = 2000;
+        this.nodes.push(new Node(this, -40, 30), new Node(this, 40, 30));
         this.updateNodes();
     }
     draw(ctx) {
         this.beginDraw(ctx);
+        ctx.strokeStyle = "#d97706"; ctx.lineWidth = 4;
+        
+        for(let i=-20; i<=20; i+=10) {
+            ctx.beginPath();
+            ctx.ellipse(i, -10, 15, 40, 0, 0, Math.PI*2);
+            ctx.stroke();
+        }
+
+        ctx.beginPath(); ctx.moveTo(-20, 30); ctx.lineTo(-40, 30); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(20, 30); ctx.lineTo(40, 30); ctx.stroke();
+        
+        if(Math.abs(this.emf) > 0.5 && !this.isBurnt) {
+            ctx.fillStyle = "#00ff96"; ctx.font = "bold 12px monospace";
+            ctx.fillText(`${Math.abs(this.emf).toFixed(1)}V EMF`, -25, 55);
+        }
+        this.endDraw(ctx);
+    }
+}
+
+class PermanentMagnet extends Component {
+    constructor(x,y) {
+        super(x,y, 120, 60, "P. Magnet");
+        this.resistance = 1e12; 
+        this.magneticField = 0.5; 
+        this.shape = "bar"; 
+        this.nodes = []; 
+        this.updateNodes();
+    }
+    draw(ctx) {
+        this.beginDraw(ctx);
+        
+        drawMagneticFieldLines(ctx, 0, 0, this.magneticField, this.shape);
+        
+        if (this.shape === "bar") {
+            this.w = 120; this.h = 40;
+            ctx.fillStyle = "#ef4444"; ctx.fillRect(-60, -20, 60, 40); 
+            ctx.fillStyle = "#3b82f6"; ctx.fillRect(0, -20, 60, 40);   
+            ctx.fillStyle = "white"; ctx.font = "bold 20px sans-serif";
+            ctx.fillText("N", -40, 7); ctx.fillText("S", 25, 7);
+        } else if (this.shape === "horseshoe") {
+            this.w = 100; this.h = 90;
+            // شكل U احترافي
+            ctx.fillStyle = "#ef4444"; // القطب الشمالي أحمر
+            ctx.beginPath(); ctx.roundRect(-45, -45, 35, 90, 8); ctx.fill();
+            ctx.fillStyle = "#3b82f6"; // القطب الجنوبي أزرق
+            ctx.beginPath(); ctx.roundRect(10, -45, 35, 90, 8); ctx.fill();
+            
+            // الوصلة العلوية
+            ctx.fillStyle = "#94a3b8"; 
+            ctx.fillRect(-20, -45, 40, 30);
+            
+            // إظهار الأحرف
+            ctx.fillStyle = "white"; ctx.font = "bold 18px sans-serif";
+            ctx.fillText("N", -35, 35); ctx.fillText("S", 20, 35);
+        }
+
+        this.endDraw(ctx);
+    }
+}
+
+class Electromagnet extends Component {
+    constructor(x,y) {
+        super(x,y, 100, 40, "Electromagnet");
+        this.resistance = 5.0; 
+        this.originalResistance = 5.0;
+        this.B = 0;
+        this.maxPower = 500;
+        // تم الإصلاح هنا: تمت إضافة this للنقطة الثانية لتظهر بشكل سليم
+        this.nodes.push(new Node(this, -50, 0), new Node(this, 50, 0)); 
+        this.updateNodes();
+    }
+    draw(ctx) {
+        this.beginDraw(ctx);
+        
+        if(Math.abs(this.current) > 0.05 && !this.isBurnt) {
+            this.B = (4 * Math.PI * 1e-7) * 500 * this.current; 
+        } else { this.B = 0; }
+
+        drawMagneticFieldLines(ctx, 0, 0, this.B, "electromagnet");
+        
+        // رسم القلب الحديدي
         ctx.fillStyle = "#475569"; ctx.roundRect(-40, -15, 80, 30, 5).fill();
+        
+        // رسم اللفات
         ctx.strokeStyle = "#b45309"; ctx.lineWidth = 2;
         for(let i=-30; i<=30; i+=8) {
             ctx.beginPath(); ctx.ellipse(i, 0, 4, 15, 0, 0, Math.PI*2); ctx.stroke();
         }
-        if(Math.abs(this.current) > 0.1 && !this.isBurnt) {
-            ctx.strokeStyle = `rgba(56, 189, 248, ${Math.min(1, Math.abs(this.current)/2)})`;
+        
+        if(Math.abs(this.current) > 0.05 && !this.isBurnt) {
+            ctx.strokeStyle = `rgba(56, 189, 248, ${Math.min(1.0, Math.abs(this.B)/0.005)})`;
             ctx.lineWidth = 3;
             ctx.beginPath(); ctx.arc(0, 0, 35, 0, Math.PI*2); ctx.stroke();
-            this.B = (4*Math.PI*1e-7) * 200 * this.current;
-        } else { this.B = 0; }
+        }
         
         if(!this.isBurnt) {
             ctx.fillStyle = "#38bdf8"; ctx.font = "bold 11px monospace";
             ctx.fillText(`${(this.B*1000).toFixed(2)}mT`, -22, 32);
         }
+        this.endDraw(ctx);
+    }
+}
+
+class Hinge extends Component {
+    constructor(x,y) {
+        super(x,y, 20, 20, "Hinge");
+        this.resistance = 1e-6; 
+        this.originalResistance = 1e-6;
+        this.nodes.push(new Node(this, -10, 0), new Node(this, 10, 0));
+        this.updateNodes();
+    }
+    draw(ctx) {
+        this.beginDraw(ctx);
+        ctx.fillStyle = "#94a3b8";
+        ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle = "#cbd5e1"; ctx.lineWidth = 2; ctx.stroke();
         this.endDraw(ctx);
     }
 }
@@ -688,7 +866,8 @@ class Voltmeter extends Component {
         ctx.fillStyle = "#1e293b"; ctx.roundRect(-28, -28, 56, 56, 8).fill();
         ctx.strokeStyle = "#3b82f6"; ctx.lineWidth = 3; ctx.stroke();
         ctx.fillStyle = "black"; ctx.fillRect(-22, -15, 44, 20);
-        ctx.fillStyle = "#facc15"; ctx.font = "bold 12px monospace"; ctx.fillText(`${Math.abs(this.voltageDrop).toFixed(1)}`, -18, 0);
+        ctx.fillStyle = "#facc15"; ctx.font = "bold 12px monospace"; 
+        ctx.fillText(`${this.voltageDrop.toFixed(1)}`, -18, 0);
         ctx.fillStyle = "white"; ctx.font = "bold 14px sans-serif"; ctx.fillText("V", -5, 22);
         this.endDraw(ctx);
     }
@@ -749,6 +928,9 @@ class Physics {
                             let vc = conn.comp.capacitance > 0 ? conn.comp.charge / conn.comp.capacitance : 0;
                             let sign = node === conn.comp.nodes[0] ? 1 : -1;
                             sv += (conn.n.voltage + (sign * vc)) / conn.res;
+                        } else if(conn.comp instanceof Coil && !conn.comp.isBurnt) {
+                            let sign = node === conn.comp.nodes[0] ? 1 : -1;
+                            sv += (conn.n.voltage + (sign * conn.comp.emf)) / conn.res;
                         } else {
                             sv += conn.n.voltage / conn.res;
                         }
@@ -765,6 +947,43 @@ class Physics {
     }
  
     static step(comps, wires, dt) {
+        comps.forEach(c => {
+            if(c instanceof Coil) {
+                let externalFlux = 0;
+                
+                comps.forEach(m => {
+                    if(m instanceof PermanentMagnet) {
+                        let dx = (m.x + m.w/2) - (c.x + c.w/2);
+                        let dy = (m.y + m.h/2) - (c.y + c.h/2);
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        let flux = m.magneticField / (1 + Math.pow(dist/100, 2));
+                        externalFlux += flux;
+                    } else if (m instanceof Electromagnet && !m.isBurnt) {
+                        let dx = (m.x + m.w/2) - (c.x + c.w/2);
+                        let dy = (m.y + m.h/2) - (c.y + c.h/2);
+                        let dist = Math.sqrt(dx*dx + dy*dy);
+                        let flux = m.B / (1 + Math.pow(dist/100, 2));
+                        externalFlux += flux;
+                    }
+                });
+
+                let inducedEmf = 0;
+                if(c.lastFlux !== undefined && dt > 0) {
+                    let dPhi = externalFlux - c.lastFlux;
+                    inducedEmf += - (c.turns * dPhi) / (dt * 15); 
+                }
+                c.lastFlux = externalFlux;
+                
+                if(c.lastCurrent !== undefined && dt > 0) {
+                    let di = c.current - c.lastCurrent;
+                    let selfEmf = -c.inductance * (di / dt);
+                    inducedEmf += selfEmf;
+                }
+                
+                c.emf = Math.max(-30, Math.min(30, inducedEmf));
+            }
+        });
+
         comps.forEach(c => {
             if (c instanceof Capacitor) {
                 c.R_eq = c.capacitance > 0 ? c.esr + (dt / c.capacitance) : 1e12;
@@ -793,6 +1012,10 @@ class Physics {
                 
                 if (Math.abs(c.charge) < 1e-12) c.charge = 0;
                 c.power = Math.abs(c.voltageDrop * c.current);
+            } else if (c instanceof Coil) {
+                c.current = r > 0 ? (c.voltageDrop + c.emf) / r : 0;
+                c.power = Math.abs((c.voltageDrop + c.emf) * c.current);
+                c.lastCurrent = c.current; 
             } else {
                 c.current = r > 0 ? c.voltageDrop / r : 0;
                 c.power = Math.abs(c.voltageDrop * c.current);
@@ -802,10 +1025,12 @@ class Physics {
                 c.isBurnt = true; c.resistance = 1e12; 
                 logEvent("Fuse Blown! Circuit Protected.");
             } 
-            else if (!(c instanceof Battery) && !(c instanceof Switch) && !(c instanceof Voltmeter) && !(c instanceof Ammeter) && c.power > c.maxPower) {
-                c.isBurnt = true; 
-                c.resistance = 1e12; 
-                logEvent(`💥 ${c.name} Exploded!`);
+            else if (!(c instanceof Battery) && !(c instanceof Switch) && !(c instanceof Voltmeter) && !(c instanceof Ammeter) && !(c instanceof Hinge) && !(c instanceof Coil) && c.power > c.maxPower) {
+                if (!(c instanceof Bulb) || c.power > c.maxPower * 2) {
+                    c.isBurnt = true; 
+                    c.resistance = 1e12; 
+                    logEvent(`💥 ${c.name} Exploded!`);
+                }
             }
         });
  
@@ -831,7 +1056,10 @@ const TOOLS = [
     {name: "Capacitor", class: Capacitor, col: "#3b82f6"},
     {name: "Switch", class: Switch, col: "#94a3b8"},
     {name: "Fuse", class: Fuse, col: "#bae6fd"},
-    {name: "Magnet", class: Electromagnet, col: "#b45309"},
+    {name: "Induction Coil", class: Coil, col: "#d97706"},
+    {name: "P. Magnet", class: PermanentMagnet, col: "#ef4444"},
+    {name: "Electromagnet", class: Electromagnet, col: "#b45309"},
+    {name: "Hinge", class: Hinge, col: "#94a3b8"},
     {name: "Ammeter", class: Ammeter, col: "#ef4444"},
     {name: "Voltmeter", class: Voltmeter, col: "#3b82f6"}
 ];
@@ -846,6 +1074,68 @@ function initUI() {
         tc.appendChild(btn);
     });
 }
+
+window.loadExperiment = function(type) {
+    if(!type) return;
+    
+    components = []; wires = []; select(null);
+    let cx = WIDTH/2; let cy = HEIGHT/2;
+
+    if(type === 'cap_charge') {
+        let b = new Battery(cx - 150, cy); b.rotation = 90; components.push(b);
+        let sw = new Switch(cx - 50, cy - 100); components.push(sw);
+        let r = new Resistor(cx + 100, cy - 100); components.push(r);
+        let c = new Capacitor(cx + 150, cy); c.rotation = 90; components.push(c);
+        let v = new Voltmeter(cx + 150, cy + 100); components.push(v);
+        
+        b.updateNodes(); sw.updateNodes(); r.updateNodes(); c.updateNodes(); v.updateNodes();
+        
+        wires.push(new Wire(b.nodes[0], sw.nodes[0])); wires.push(new Wire(sw.nodes[1], r.nodes[0])); 
+        wires.push(new Wire(r.nodes[1], c.nodes[0]));  wires.push(new Wire(c.nodes[1], b.nodes[1]));  
+        wires.push(new Wire(v.nodes[0], c.nodes[0])); wires.push(new Wire(v.nodes[1], c.nodes[1]));
+        logEvent("Loaded: Capacitor Charging");
+    } 
+    else if(type === 'induction') {
+        let bulb = new Bulb(cx - 200, cy - 50); components.push(bulb);
+        let coil = new Coil(cx, cy); components.push(coil);
+        let pm = new PermanentMagnet(cx + 250, cy); components.push(pm);
+        let v = new Voltmeter(cx - 100, cy + 100); components.push(v);
+        bulb.updateNodes(); coil.updateNodes(); pm.updateNodes(); v.updateNodes();
+        wires.push(new Wire(coil.nodes[0], bulb.nodes[0])); wires.push(new Wire(coil.nodes[1], bulb.nodes[1]));
+        wires.push(new Wire(v.nodes[0], coil.nodes[0])); wires.push(new Wire(v.nodes[1], coil.nodes[1]));
+        logEvent("Loaded: Faraday's Induction (Drag Magnet!)");
+    }
+    else if(type === 'self_induction') {
+        let b = new Battery(cx - 150, cy); b.voltage = 9; b.rotation = 90; components.push(b);
+        let sw = new Switch(cx - 50, cy - 100); components.push(sw);
+        let coil = new Coil(cx + 100, cy - 100); components.push(coil);
+        let bulb = new Bulb(cx + 100, cy + 50); components.push(bulb); 
+        
+        b.updateNodes(); sw.updateNodes(); coil.updateNodes(); bulb.updateNodes();
+        
+        wires.push(new Wire(b.nodes[0], sw.nodes[0])); 
+        wires.push(new Wire(sw.nodes[1], coil.nodes[0])); 
+        wires.push(new Wire(coil.nodes[1], b.nodes[1]));  
+        
+        wires.push(new Wire(bulb.nodes[0], coil.nodes[0]));
+        wires.push(new Wire(bulb.nodes[1], coil.nodes[1]));
+        logEvent("Loaded: Self-Induction. Close then quickly open the switch!");
+    }
+    else if(type === 'lc_tank') {
+        let c = new Capacitor(cx - 100, cy); c.rotation = 90; c.charge = 5e-5; 
+        components.push(c);
+        let sw = new Switch(cx, cy - 100); components.push(sw);
+        let coil = new Coil(cx + 100, cy); coil.rotation = 90; components.push(coil);
+        
+        c.updateNodes(); sw.updateNodes(); coil.updateNodes();
+        
+        wires.push(new Wire(c.nodes[0], sw.nodes[0])); 
+        wires.push(new Wire(sw.nodes[1], coil.nodes[0])); 
+        wires.push(new Wire(c.nodes[1], coil.nodes[1]));  
+        logEvent("Loaded: LC Oscillation. Close switch to start resonating.");
+    }
+    document.getElementById('exp-select').value = ""; 
+};
  
 function spawn(ClassRef, randOffset = true) {
     let ox = randOffset ? (Math.random()*60 - 30) : 0;
@@ -853,9 +1143,7 @@ function spawn(ClassRef, randOffset = true) {
     let spawnPt = screenToWorld(WIDTH/2 + ox, HEIGHT/2 + oy);
     let comp = new ClassRef(spawnPt.x - 30, spawnPt.y - 30);
     components.push(comp);
-    
     if(appMode === 'wire') toggleMode();
-    
     select(comp);
     logEvent(`Spawned ${comp.name}`);
 }
@@ -908,6 +1196,28 @@ function select(c, w = null) {
                 <div class="prop-group"><label>Max Power Limit (W)</label>
                 <input type="number" class="prop-input" value="${c.maxPower}" onchange="updateProp('maxPower', this.value)"></div>
             `;
+        } else if(c instanceof Coil) {
+            dProps.innerHTML = `
+                <div class="prop-group"><label>Number of Turns (N)</label>
+                <input type="number" class="prop-input" value="${c.turns}" onchange="updateProp('turns', this.value)"></div>
+                <div class="prop-group"><label>Inductance (H)</label>
+                <input type="number" step="0.1" class="prop-input" value="${c.inductance}" onchange="updateProp('inductance', this.value)"></div>
+                <div class="prop-group"><label>Resistance (Ω)</label>
+                <input type="number" step="0.1" class="prop-input" value="${c.originalResistance}" onchange="updateProp('resistance', this.value)"></div>
+            `;
+        } else if (c instanceof PermanentMagnet) {
+            let opts = `<option value="bar" ${c.shape==='bar'?'selected':''}>Bar Magnet</option>
+                        <option value="horseshoe" ${c.shape==='horseshoe'?'selected':''}>Horseshoe (U)</option>`;
+            dProps.innerHTML = `
+                <div class="prop-group"><label>Magnetic Field (Tesla)</label>
+                <input type="number" step="0.1" class="prop-input" value="${c.magneticField}" onchange="updateProp('magneticField', this.value)"></div>
+                <div class="prop-group"><label>Shape</label>
+                <select onchange="updateMagnetShape(this.value)">${opts}</select></div>
+                <p style="color:#00ff96; text-align:center; font-size:12px; margin-top:10px;">Drag near a coil to induce EMF safely!</p>
+            `;
+            statsBox.style.display = 'none'; 
+        } else if (c instanceof Hinge) {
+            dProps.innerHTML = `<p style="color:#aaa; text-align:center; font-size:12px; margin-bottom:10px;">A hinge joint to route wires neatly (does not affect current).</p>`;
         } else if(c instanceof Capacitor) {
             btnInspect.style.display = 'block';
             let opts = Object.keys(DIELECTRICS).map(k => `<option value="${k}" ${c.matKey===k?'selected':''}>${DIELECTRICS[k].name}</option>`).join('');
@@ -948,6 +1258,12 @@ window.updateProp = function(prop, val) {
         if(prop === 'resistance' && num > 0) selectedComp.originalResistance = num; 
     }
 };
+
+window.updateMagnetShape = function(val) {
+    if(selectedComp && selectedComp instanceof PermanentMagnet) {
+        selectedComp.shape = val;
+    }
+}
  
 window.updateCap = function(prop, val) {
     if(selectedComp) { 
@@ -955,7 +1271,7 @@ window.updateCap = function(prop, val) {
             selectedComp.matKey = val;
         } else {
             let num = parseFloat(val.value);
-            if(isNaN(num) || num <= 0) num = 0.1; // منع الأخطاء الرياضية والحذف
+            if(isNaN(num) || num <= 0) num = 0.1; 
             val.value = num;
             selectedComp[prop] = num;
         }
@@ -993,6 +1309,8 @@ window.deleteSelected = function() {
 };
  
 window.addEventListener('keydown', e => {
+    if(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return; 
+
     if(e.key.toLowerCase() === 'r') flipSelected();
     if(e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
 });
@@ -1009,15 +1327,17 @@ window.toggleRight = function() {
 };
  
 // ══════════════════════════════════════════════════════
-// 6. Touch & Mouse Events (Z-Index Fixed)
+// 6. Touch & Mouse Events (Optimized for Mobile/Smartboard)
 // ══════════════════════════════════════════════════════
 let isPanning = false; let lastPan = {x:0, y:0};
 let pointers = new Map();
  
 canvas.addEventListener('pointerdown', e => {
-    if(e.target.closest('.panel') || e.target.closest('.toggle-btn') || e.target.closest('#micro-modal') || e.target.closest('#mode-toggle')) return;
+    if(e.target.closest('.panel') || e.target.closest('.toggle-btn') || e.target.closest('#micro-modal') || e.target.closest('#top-bar')) return;
     
-    e.preventDefault(); pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+    // منع السلوك الافتراضي مثل السحب والتمرير على الموبايل واللابتوب والسبورات
+    e.preventDefault(); 
+    pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
     
     if(pointers.size === 2 || e.button === 1 || e.button === 2) { 
         isPanning = true; lastPan = {x: e.clientX, y: e.clientY}; return; 
@@ -1038,7 +1358,6 @@ canvas.addEventListener('pointerdown', e => {
         select(null);
     } 
     else {
-        // حلقة معكوسة لضمان تحديد القطعة العلوية دائماً
         for(let i = components.length - 1; i >= 0; i--) {
             let c = components[i];
             if(c.checkHit(pos)) {
@@ -1048,7 +1367,6 @@ canvas.addEventListener('pointerdown', e => {
                 actionState.offsetX = pos.x - c.x; 
                 actionState.offsetY = pos.y - c.y;
                 
-                // تقديم القطعة للأمام برمجياً
                 components.splice(i, 1);
                 components.push(c);
                 return;
@@ -1062,7 +1380,7 @@ canvas.addEventListener('pointerdown', e => {
 });
  
 canvas.addEventListener('pointermove', e => {
-    if(e.target.closest('.panel') || e.target.closest('.toggle-btn') || e.target.closest('#mode-toggle')) return;
+    if(e.target.closest('.panel') || e.target.closest('.toggle-btn') || e.target.closest('#top-bar')) return;
     e.preventDefault();
     if(!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
@@ -1086,24 +1404,30 @@ canvas.addEventListener('pointermove', e => {
     let pos = screenToWorld(e.clientX, e.clientY);
     
     if(appMode === 'edit' && actionState.dragging) {
-        actionState.dragging.x = snap(pos.x - actionState.offsetX);
-        actionState.dragging.y = snap(pos.y - actionState.offsetY);
+        actionState.dragging.x = pos.x - actionState.offsetX;
+        actionState.dragging.y = pos.y - actionState.offsetY;
         actionState.dragging.updateNodes();
     }
     
-    if(appMode === 'wire' && actionState.activeNode) {
+    if(appMode === 'wire' && actionState.activeNode && actionState.tempPos) {
         actionState.tempPos = pos;
     }
 });
  
 canvas.addEventListener('pointerup', handlePointerUp);
 canvas.addEventListener('pointercancel', handlePointerUp);
-canvas.addEventListener('contextmenu', e => { if(!e.target.closest('.panel')) e.preventDefault(); });
+canvas.addEventListener('contextmenu', e => { if(!e.target.closest('.panel') && !e.target.closest('#top-bar')) e.preventDefault(); });
  
 function handlePointerUp(e) {
     pointers.delete(e.pointerId);
     if(pointers.size < 2) camera.lastPinchDist = null;
     if(pointers.size === 0) isPanning = false;
+
+    if(actionState.dragging) {
+        actionState.dragging.x = snap(actionState.dragging.x);
+        actionState.dragging.y = snap(actionState.dragging.y);
+        actionState.dragging.updateNodes();
+    }
  
     if(appMode === 'wire' && actionState.activeNode && actionState.tempPos) {
         let target = null; let pos = actionState.tempPos;
@@ -1123,7 +1447,7 @@ function handlePointerUp(e) {
 }
  
 canvas.addEventListener('wheel', e => {
-    if(e.target.closest('.panel')) return;
+    if(e.target.closest('.panel') || e.target.closest('#top-bar')) return;
     e.preventDefault();
     let zoomAmount = e.deltaY > 0 ? 0.9 : 1.1;
     let oldZoom = camera.zoom;
@@ -1205,7 +1529,7 @@ function renderMicroscopic(ctx, cap) {
         ctx.save(); ctx.translate(px, py);
         
         if(mat.polar) {
-            document.getElementById('micro-desc').innerText = "المواد القطبية (Polar): الجزيئات تمتلك أقطاب ثابتة، وتدور فيزيائياً لتصطف مع اتجاه المجال الكهربائي العالي.";
+            document.getElementById('micro-desc').innerText = "Polar materials: Molecules have permanent dipoles and physically rotate to align with the strong electric field.";
             if(normalizedE > 0.05) {
                 let diff = targetAngle - m.angle;
                 while(diff < -Math.PI) diff += Math.PI*2;
@@ -1221,7 +1545,7 @@ function renderMicroscopic(ctx, cap) {
             ctx.fillStyle = "#3b82f6"; ctx.beginPath(); ctx.arc(-pw/4, 0, ph/2, 0, Math.PI*2); ctx.fill(); 
             ctx.fillStyle = "white"; ctx.fillText("+", pw/4 - 4, 5); ctx.fillText("-", -pw/4 - 4, 5);
         } else {
-            document.getElementById('micro-desc').innerText = "المواد غير القطبية (Non-Polar): الجزيئات تتشوه وتستطيل تحت تأثير المجال لتكوين ديبولات مؤقتة.";
+            document.getElementById('micro-desc').innerText = "Non-polar materials: Molecules stretch and deform under the field to create temporary dipoles.";
             m.stretch = m.stretch * 0.85 + (normalizedE * 25) * 0.15; 
             
             ctx.rotate(targetAngle);
@@ -1244,7 +1568,6 @@ function renderMicroscopic(ctx, cap) {
 // ══════════════════════════════════════════════════════
 let lastTime = Date.now();
  
-// ترتيب القطع الأولية بتباعد حتى ما تتراكم
 initUI();
 spawn(Battery, false); components[0].x -= 150; components[0].updateNodes();
 spawn(Switch, false);
@@ -1285,7 +1608,7 @@ function loop() {
     }
     ctx.restore();
  
-    if(selectedComp && !selectedComp.isBurnt && !(selectedComp instanceof Wire)) {
+    if(selectedComp && !selectedComp.isBurnt && !(selectedComp instanceof Wire) && !(selectedComp instanceof PermanentMagnet) && !(selectedComp instanceof Hinge)) {
         document.getElementById('stat-i').innerText = Math.abs(selectedComp.current).toFixed(3) + " A";
         document.getElementById('stat-v').innerText = Math.abs(selectedComp.voltageDrop).toFixed(3) + " V";
         document.getElementById('stat-p').innerText = selectedComp.power.toFixed(3) + " W";
@@ -1296,7 +1619,7 @@ function loop() {
             qText = selectedComp.charge.toExponential(2) + " C (Vc=" + internalVoltage.toFixed(2) + "V)";
         }
         document.getElementById('stat-q').innerText = qText;
-    } else if (selectedComp && selectedComp.isBurnt) {
+    } else if (selectedComp && (selectedComp.isBurnt || selectedComp instanceof PermanentMagnet || selectedComp instanceof Hinge)) {
         document.getElementById('stat-i').innerText = "0.00 A";
         document.getElementById('stat-v').innerText = "0.00 V";
         document.getElementById('stat-p').innerText = "0.00 W";
@@ -1312,5 +1635,3 @@ loop();
 </script>
 </body>
 </html>
-
-
